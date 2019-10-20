@@ -2,11 +2,15 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "KrpClient.h"
+
 static int tests = 0, fails = 0;
 #define test(_s) { printf("#%02d ", ++tests); printf(_s); }
 #define test_cond(_c) if(_c) printf("\033[0;32mPASSED\033[0;0m\n"); else {printf("\033[0;31mFAILED\033[0;0m\n"); fails++;}
 
-int main(int argc, char **argv) {
+int main(int argcs, char **argvs) {
+
+
     int res;
     const char *argv[3];
     argv[0] = "SET";
@@ -14,32 +18,32 @@ int main(int argc, char **argv) {
     argv[2] = "bar";
     size_t lens[3] = { 3, 7, 3 };
 
-    test("ClientWriter: ");
-    ClientWriter c_writer;
+    test("KrpClient: ");
+    KrpClient client;
     sds sds_cmd;
-    int len = c_writer.FormatCmd(sds_cmd,argc,argv,lens);
+    int len = client.FormatCommand(&sds_cmd,argc,argv,lens);
     test_cond(strncmp(sds_cmd,"*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",len) == 0 && len == 4+4+(3+2)+4+(3+2)+4+(3+2));
+    client.FreeCommand(sds_cmd);
 
+    // test("ClientReader: ");
+    // ClientReader c_reader;
+    // Reply reply;
+    // res = c_reader.Feed((char*)"+OK",3, reply);
+    // test_cond(res==REDIS_OK && reply.IsEmpty());
+    // res = c_reader.Feed((char*)"\r\n",2, &reply);
+    // test_cond(res==REDIS_OK && reply.IsOk());
 
-    test("ClientReader: ");
-    ClientReader c_reader;
-    Reply reply;
-    res = c_reader.Feed((char*)"+OK",3, reply);
-    test_cond(res==REDIS_OK && reply.IsEmpty());
-    res = c_reader.Feed((char*)"\r\n",2, &reply);
-    test_cond(res==REDIS_OK && reply.IsOk());
+    // test("ServerReader: ");
+    // ServerReader s_reader;
+    // Command cmd;
+    // res = s_reader.Feed((char*)"*3\r", 3, cmd);
+    // test_cond(res==REDIS_OK && cmd.IsEmpty());
+    // res = s_reader.Feed("\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n", len-3, cmd);
+    // test_cond(res==REDIS_OK && trcasecmp(cmd.Name(),"SET") == 0);
 
-    test("ServerReader: ");
-    ServerReader s_reader;
-    Command cmd;
-    res = s_reader.Feed((char*)"*3\r", 3, cmd);
-    test_cond(res==REDIS_OK && cmd.IsEmpty());
-    res = s_reader.Feed("\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n", len-3, cmd);
-    test_cond(res==REDIS_OK && trcasecmp(cmd.Name(),"SET") == 0);
-
-    test("ServerWriter: ");
-    ServerWriter s_writer;
-    sds sds_reply;
+    // test("ServerWriter: ");
+    // ServerWriter s_writer;
+    // sds sds_reply;
     // void addReplyNull(client *c);
     // void addReplyNullArray(client *c);
     // void addReplyBool(client *c, int b);
@@ -66,20 +70,20 @@ int main(int argc, char **argv) {
     // void addReplyHelp(client *c, const char **help);
     // void addReplySubcommandSyntaxError(client *c);
     // void addReplyLoadedModules(client *c);
-    sds_cmd.Empty();
-    s_writer.addReplyBulkCString(sds_reply, "ok");
-    test_cond(strcasecmp(sds_reply.StringValue(),"+ok") == 0);
+    // sds_cmd.Empty();
+    // s_writer.addReplyBulkCString(sds_reply, "ok");
+    // test_cond(strcasecmp(sds_reply.StringValue(),"+ok") == 0);
 
-    test("Client && Server: ");
-    Stream st;
-    KServer server(st);
-    server.CreateChannel(st);
+    // test("Client && Server: ");
+    // Stream st;
+    // KServer server(st);
+    // server.CreateChannel(st);
 
-    KClient client(st);
-    reply.Empty();
-    client.EmitCommand("ping", reply);
-    test_cond(strcasecmp(reply.StringValue(),"pong") == 0);
+    // KClient client(st);
+    // reply.Empty();
+    // client.EmitCommand("ping", reply);
+    // test_cond(strcasecmp(reply.StringValue(),"pong") == 0);
 
-    sdsfree(sds_cmd);
+    // sdsfree(sds_cmd);
 
 }

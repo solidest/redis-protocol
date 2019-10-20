@@ -1,31 +1,66 @@
-# 方便起见一般都会先定义编译器链接器
-CC = gcc 
-LD = gcc
+# tool macros
+CC := gcc
+CCFLAG := -Wall -pedantic -O2
+DBGFLAG := -g
+CCOBJFLAG := $(CCFLAG) -c
 
-# 正则表达式表示目录下所有.c文件，相当于：SRCS = main.c a.c b.c
-SRCS = $(wildcard *.cpp)
 
-# OBJS表示SRCS中把列表中的.c全部替换为.o，相当于：OBJS = main.o a.o b.o
-OBJS = $(patsubst %c, %o, $(SRCS))
+# path macros
+BIN_PATH := bin
+OBJ_PATH := obj
+SRC_PATH := src
+DBG_PATH := debug
 
-# 可执行文件的名字
-TARGET = test
+# compile macros
+TARGET_NAME := test
+ifeq ($(OS),Windows_NT)
+	TARGET_NAME := $(addsuffix .exe,$(TARGET_NAME))
+endif
+TARGET := $(BIN_PATH)/$(TARGET_NAME)
+TARGET_DEBUG := $(DBG_PATH)/$(TARGET_NAME)
+MAIN_SRC := test.cpp
 
-# .PHONE伪目标，具体含义百度一下一大堆介绍
-.PHONY:all clean
+# src files & obj files
+SRC := $(foreach x, $(SRC_PATH), $(wildcard $(addprefix $(x)/*,.c*)))
+OBJ := $(addprefix $(OBJ_PATH)/, $(addsuffix .o, $(notdir $(basename $(SRC)))))
+OBJ_DEBUG := $(addprefix $(DBG_PATH)/, $(addsuffix .o, $(notdir $(basename $(SRC)))))
 
-# 要生成的目标文件
+# clean files list
+DISTCLEAN_LIST := $(OBJ) \
+                  $(OBJ_DEBUG)
+CLEAN_LIST := $(TARGET) \
+			  $(TARGET_DEBUG) \
+			  $(DISTCLEAN_LIST)
+
+# default rule
+default: all
+
+# non-phony targets
+$(TARGET): $(OBJ)
+	$(CC) $(CCFLAG) -o $@ $?
+
+$(OBJ_PATH)/%.o: $(SRC_PATH)/%.c*
+	$(CC) $(CCOBJFLAG) -o $@ $<
+
+$(DBG_PATH)/%.o: $(SRC_PATH)/%.c*
+	$(CC) $(CCOBJFLAG) $(DBGFLAG) -o $@ $<
+
+$(TARGET_DEBUG): $(OBJ_DEBUG)
+	$(CC) $(CCFLAG) $(DBGFLAG) $? -o $@
+
+# phony rules
+.PHONY: all
 all: $(TARGET)
 
-# 第一行依赖关系：冒号后面为依赖的文件，相当于test: main.o a.o b.o
-# 第二行规则：$@表示目标文件，$^表示所有依赖文件，$<表示第一个依赖文件
-$(TARGET): $(OBJS)
-	$(LD) -o $@ $^
+.PHONY: debug
+debug: $(TARGET_DEBUG)
 
-# 上一句目标文件依赖一大堆.o文件，这句表示所有.o都由相应名字的.c文件自动生成
-%o:%c
-	$(CC) -c $^
-
-# make clean删除所有.o和目标文件
+.PHONY: clean
 clean:
-	rm -f $(OBJS) $(TARGET)
+	@echo CLEAN $(CLEAN_LIST)
+	@rm -f $(CLEAN_LIST)
+
+.PHONY: distclean
+distclean:
+	@echo CLEAN $(CLEAN_LIST)
+	@rm -f $(DISTCLEAN_LIST)
