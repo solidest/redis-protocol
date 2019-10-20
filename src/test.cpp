@@ -10,20 +10,31 @@ static int tests = 0, fails = 0;
 
 int main(int argcs, char **argvs) {
 
-
+    int len;
     int res;
     const char *argv[3];
     argv[0] = "SET";
     argv[1] = "foo\0xxx";
     argv[2] = "bar";
     size_t lens[3] = { 3, 7, 3 };
+    int argc = 3;
 
-    test("KrpClient: ");
     KrpClient client;
     sds sds_cmd;
-    int len = client.FormatCommand(&sds_cmd,argc,argv,lens);
-    test_cond(strncmp(sds_cmd,"*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",len) == 0 && len == 4+4+(3+2)+4+(3+2)+4+(3+2));
-    client.FreeCommand(sds_cmd);
+
+    sds_cmd = NULL;
+    test("Format command into sds by passing argc/argv without lengths: ");
+    len = client.FormatCommand(&sds_cmd,argc,argv,NULL);
+    test_cond(strncmp(sds_cmd,"*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",len) == 0 &&
+        len == 4+4+(3+2)+4+(3+2)+4+(3+2));
+    sdsfree(sds_cmd);
+
+    sds_cmd = NULL;
+    test("Format command into sds by passing argc/argv with lengths: ");
+    len = client.FormatCommand(&sds_cmd,argc,argv,lens);
+    test_cond(strncmp(sds_cmd,"*3\r\n$3\r\nSET\r\n$7\r\nfoo\0xxx\r\n$3\r\nbar\r\n",len) == 0 &&
+        len == 4+4+(3+2)+4+(7+2)+4+(3+2));
+    sdsfree(sds_cmd);
 
     // test("ClientReader: ");
     // ClientReader c_reader;

@@ -1,8 +1,8 @@
 # tool macros
-CC := gcc
-CCFLAG := -Wall -pedantic -O2
+CC := g++
+CCFLAG := -g
 DBGFLAG := -g
-CCOBJFLAG := $(CCFLAG) -c
+CCOBJFLAG := $(CCFLAG) -c  -std=c++11
 
 
 # path macros
