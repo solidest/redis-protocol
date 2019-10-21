@@ -12,7 +12,7 @@
 # define _CLIENTWRITER_H_
 
 
-#include "sds.h"
+#include "SdsWrapper.h"
 
 
 #define KRP_ERR -1
@@ -28,8 +28,7 @@ class KrpClient {
         // void redisFreeCommand(char *cmd);
         // void redisFreeSdsCommand(sds cmd);
 
-        int FormatCommand(sds *target, int argc, const char ** argv, const size_t *argvlen);
-        void FreeCommand(sds cmd);
+        int FormatCommand(SdsWrapper& target, int argc, const char ** argv, const size_t *argvlen);
 
 };
 

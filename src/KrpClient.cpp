@@ -26,15 +26,15 @@ static size_t bulklen(size_t len) {
     return 1+countDigits(len)+2+len+2;
 }
 
-int KrpClient::FormatCommand(sds *target, int argc, const char ** argv, const size_t *argvlen) {
+int KrpClient::FormatCommand(SdsWrapper& target, int argc, const char ** argv, const size_t *argvlen) {
     sds cmd;
     unsigned long long totlen;
     int j;
     size_t len;
 
     /* Abort on a NULL target */
-    if (target == NULL)
-        return -1;
+    // if (target == NULL)
+    //     return -1;
 
     /* Calculate our total size */
     totlen = 1+countDigits(argc)+2;
@@ -44,7 +44,7 @@ int KrpClient::FormatCommand(sds *target, int argc, const char ** argv, const si
     }
 
     /* Use an SDS string for command construction */
-    cmd = sdsempty();
+    cmd = target.Dettach();
     if (cmd == NULL)
         return -1;
 
@@ -64,11 +64,6 @@ int KrpClient::FormatCommand(sds *target, int argc, const char ** argv, const si
 
     assert(sdslen(cmd)==totlen);
 
-    *target = cmd;
+    target.Attach(cmd);
     return totlen;
-}
-
-
-void KrpClient::FreeCommand(sds cmd) {
-
 }
