@@ -1,14 +1,37 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <vector>
 
-#include "KrpClient.h"
+#include "KrpSender.h"
+#include "KrpRecver.h"
+#include "KrpCommands.h"
 
 static int tests = 0, fails = 0;
 #define test(_s) { printf("#%02d ", ++tests); printf(_s); }
 #define test_cond(_c) if(_c) printf("\033[0;32mPASSED\033[0;0m\n"); else {printf("\033[0;31mFAILED\033[0;0m\n"); fails++;}
 
+
+void CommandDispatcher(vector<sds>& args) {
+    if(args.size()>0) {
+        printf("ExecCommand(%s", args[0]);
+        for(int i=1; i<args.size(); i++) {
+            printf(" %s", args[i]);
+        }
+        printf(") ");       
+    }
+
+    test_cond(args.size()>=1);
+}
+
+void SendBuffer(sds buf) {
+    // printf("%s", buf);
+    test_cond(buf[0]=='*');
+}
+
 int main(int argcs, char **argvs) {
+
+    KrpCommands::InitialCommands();
 
     int len;
     int res;
@@ -19,80 +42,41 @@ int main(int argcs, char **argvs) {
     size_t lens[3] = { 3, 7, 3 };
     int argc = 3;
 
-    KrpClient client;
-    SdsWrapper sds_cmd;
+    KrpSender sender(SendBuffer);
+    KrpCommands cmds(sender);
+    KrpRecver recver(cmds);
 
+    SdsWrapper sds_cmd;
     sds_cmd.Reset();
     test("Format command into sds by passing argc/argv without lengths: ");
-    len = client.FormatCommand(sds_cmd,argc,argv,NULL);
+    len = sender.FormatCommand(sds_cmd,argc,argv,NULL);
     test_cond(strncmp(sds_cmd.Get(),"*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",len) == 0 &&
         len == 4+4+(3+2)+4+(3+2)+4+(3+2));
 
     sds_cmd.Reset();
     test("Format command into sds by passing argc/argv with lengths: ");
-    len = client.FormatCommand(sds_cmd,argc,argv,lens);
+    len = sender.FormatCommand(sds_cmd,argc,argv,lens);
     test_cond(strncmp(sds_cmd.Get(),"*3\r\n$3\r\nSET\r\n$7\r\nfoo\0xxx\r\n$3\r\nbar\r\n",len) == 0 &&
         len == 4+4+(3+2)+4+(7+2)+4+(3+2));
 
-    // test("ClientReader: ");
-    // ClientReader c_reader;
-    // Reply reply;
-    // res = c_reader.Feed((char*)"+OK",3, reply);
-    // test_cond(res==REDIS_OK && reply.IsEmpty());
-    // res = c_reader.Feed((char*)"\r\n",2, &reply);
-    // test_cond(res==REDIS_OK && reply.IsOk());
+    test("Feed client buffer to recver: ");
+    
+    sds buf1 = sdsnew("*3\r");
+    sds buf2 = sdsnew("\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n");
+    res = recver.Feed(buf1);
+    res = recver.Feed(buf2);
+    sdsfree(buf1);
+    sdsfree(buf2);
 
-    // test("ServerReader: ");
-    // ServerReader s_reader;
-    // Command cmd;
-    // res = s_reader.Feed((char*)"*3\r", 3, cmd);
-    // test_cond(res==REDIS_OK && cmd.IsEmpty());
-    // res = s_reader.Feed("\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n", len-3, cmd);
-    // test_cond(res==REDIS_OK && trcasecmp(cmd.Name(),"SET") == 0);
+    test("Feed telnet buffer to recver: ");
+    KrpRecver recver2(cmds);
+    sds buf3 = sdsnew("ping\r\n");
+    recver2.Feed(buf3);
+    sdsfree(buf3);
 
-    // test("ServerWriter: ");
-    // ServerWriter s_writer;
-    // sds sds_reply;
-    // void addReplyNull(client *c);
-    // void addReplyNullArray(client *c);
-    // void addReplyBool(client *c, int b);
-    // void addReplyVerbatim(client *c, const char *s, size_t len, const char *ext);
-    // void addReplyProto(client *c, const char *s, size_t len);
-    // void AddReplyFromClient(client *c, client *src);
-    // void addReplyBulk(client *c, robj *obj);
-    // void addReplyBulkCString(client *c, const char *s);
-    // void addReplyBulkCBuffer(client *c, const void *p, size_t len);
-    // void addReplyBulkLongLong(client *c, long long ll);
-    // void addReply(client *c, robj *obj);
-    // void addReplySds(client *c, sds s);
-    // void addReplyBulkSds(client *c, sds s);
-    // void addReplyError(client *c, const char *err);
-    // void addReplyStatus(client *c, const char *status);
-    // void addReplyDouble(client *c, double d);
-    // void addReplyHumanLongDouble(client *c, long double d);
-    // void addReplyLongLong(client *c, long long ll);
-    // void addReplyArrayLen(client *c, long length);
-    // void addReplyMapLen(client *c, long length);
-    // void addReplySetLen(client *c, long length);
-    // void addReplyAttributeLen(client *c, long length);
-    // void addReplyPushLen(client *c, long length);
-    // void addReplyHelp(client *c, const char **help);
-    // void addReplySubcommandSyntaxError(client *c);
-    // void addReplyLoadedModules(client *c);
-    // sds_cmd.Empty();
-    // s_writer.addReplyBulkCString(sds_reply, "ok");
-    // test_cond(strcasecmp(sds_reply.StringValue(),"+ok") == 0);
-
-    // test("Client && Server: ");
-    // Stream st;
-    // KServer server(st);
-    // server.CreateChannel(st);
-
-    // KClient client(st);
-    // reply.Empty();
-    // client.EmitCommand("ping", reply);
-    // test_cond(strcasecmp(reply.StringValue(),"pong") == 0);
-
-    // sdsfree(sds_cmd);
+    test("Format from Sender then Feed to Recver: ");
+    sds_cmd.Reset();
+    sender.FormatCommand(sds_cmd,argc,argv,lens);
+    recver.Feed(sds_cmd.Get());
 
 }

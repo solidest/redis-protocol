@@ -4,7 +4,7 @@
 // #include <errno.h>
 // #include <ctype.h>
 
-#include "KrpClient.h"
+#include "KrpSender.h"
 #include "sds.h"
 
 /* Return the number of digits of 'v' when converted to string in radix 10.
@@ -26,7 +26,17 @@ static size_t bulklen(size_t len) {
     return 1+countDigits(len)+2+len+2;
 }
 
-int KrpClient::FormatCommand(SdsWrapper& target, int argc, const char ** argv, const size_t *argvlen) {
+KrpSender::KrpSender(SendHandle* psender) {
+    _psender = psender;
+}
+
+void KrpSender::SendCommand(int argc, const char ** argv, const size_t *argvlen) {
+    SdsWrapper target;
+    FormatCommand(target, argc, argv, argvlen);
+    this->_psender(target.Get());
+}
+
+int KrpSender::FormatCommand(SdsWrapper& target, int argc, const char ** argv, const size_t *argvlen) {
     sds cmd;
     unsigned long long totlen;
     int j;
@@ -67,3 +77,9 @@ int KrpClient::FormatCommand(SdsWrapper& target, int argc, const char ** argv, c
     target.Attach(cmd);
     return totlen;
 }
+
+// void KrpSender::Send(int argc, const char ** argv, const size_t *argvlen) {
+//     SdsWrapper target;
+//     FormatCommand(target, argc, argv, argvlen);
+
+// }
