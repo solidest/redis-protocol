@@ -6,6 +6,7 @@
 #include "KrpSender.h"
 #include "KrpRecver.h"
 #include "KrpCommands.h"
+#include "Krp.h"
 
 static int tests = 0, fails = 0;
 #define test(_s) { printf("#%02d ", ++tests); printf(_s); }
@@ -75,9 +76,16 @@ int main(int argcs, char **argvs) {
     sdsfree(buf3);
 
     test("Format from Sender then Feed to Recver: ");
-    
-    sender.FormatCommand(&sds_cmd,argc,argv,lens);
-    recver.Feed(sds_cmd);
+    KrpSender senderx(SendBuffer);
+    KrpCommands cmdsx(sender);
+    KrpRecver recverx(cmds);
+    senderx.FormatCommand(&sds_cmd,argc,argv,lens);
+    recverx.Feed(sds_cmd);
     sdsfree(sds_cmd);
 
+    test("Krp: ");
+    Krp krp(SendBuffer);
+    sds buf = sdsnew("*1\r\n$4\r\nping\r\n");
+    krp.Recved(buf);
+    sdsfree(buf);
 }
