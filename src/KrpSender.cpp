@@ -31,20 +31,21 @@ KrpSender::KrpSender(SendHandle* psender) {
 }
 
 void KrpSender::SendCommand(int argc, const char ** argv, const size_t *argvlen) {
-    SdsWrapper target;
-    FormatCommand(target, argc, argv, argvlen);
-    this->_psender(target.Get());
+    sds buf;
+    FormatCommand(&buf, argc, argv, argvlen);
+    this->_psender(buf);
+    sdsfree(buf);
 }
 
-int KrpSender::FormatCommand(SdsWrapper& target, int argc, const char ** argv, const size_t *argvlen) {
+int KrpSender::FormatCommand(sds* target, int argc, const char ** argv, const size_t *argvlen) {
     sds cmd;
     unsigned long long totlen;
     int j;
     size_t len;
 
     /* Abort on a NULL target */
-    // if (target == NULL)
-    //     return -1;
+    if (target == NULL)
+        return -1;
 
     /* Calculate our total size */
     totlen = 1+countDigits(argc)+2;
@@ -54,7 +55,7 @@ int KrpSender::FormatCommand(SdsWrapper& target, int argc, const char ** argv, c
     }
 
     /* Use an SDS string for command construction */
-    cmd = target.Dettach();
+    cmd = sdsempty();
     if (cmd == NULL)
         return -1;
 
@@ -74,7 +75,7 @@ int KrpSender::FormatCommand(SdsWrapper& target, int argc, const char ** argv, c
 
     assert(sdslen(cmd)==totlen);
 
-    target.Attach(cmd);
+    *target = cmd;
     return totlen;
 }
 

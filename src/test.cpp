@@ -46,18 +46,18 @@ int main(int argcs, char **argvs) {
     KrpCommands cmds(sender);
     KrpRecver recver(cmds);
 
-    SdsWrapper sds_cmd;
-    sds_cmd.Reset();
+    sds sds_cmd;
     test("Format command into sds by passing argc/argv without lengths: ");
-    len = sender.FormatCommand(sds_cmd,argc,argv,NULL);
-    test_cond(strncmp(sds_cmd.Get(),"*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",len) == 0 &&
+    len = sender.FormatCommand(&sds_cmd,argc,argv,NULL);
+    test_cond(strncmp(sds_cmd,"*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",len) == 0 &&
         len == 4+4+(3+2)+4+(3+2)+4+(3+2));
+    sdsfree(sds_cmd);
 
-    sds_cmd.Reset();
     test("Format command into sds by passing argc/argv with lengths: ");
-    len = sender.FormatCommand(sds_cmd,argc,argv,lens);
-    test_cond(strncmp(sds_cmd.Get(),"*3\r\n$3\r\nSET\r\n$7\r\nfoo\0xxx\r\n$3\r\nbar\r\n",len) == 0 &&
+    len = sender.FormatCommand(&sds_cmd,argc,argv,lens);
+    test_cond(strncmp(sds_cmd,"*3\r\n$3\r\nSET\r\n$7\r\nfoo\0xxx\r\n$3\r\nbar\r\n",len) == 0 &&
         len == 4+4+(3+2)+4+(7+2)+4+(3+2));
+    sdsfree(sds_cmd);
 
     test("Feed client buffer to recver: ");
     
@@ -75,8 +75,9 @@ int main(int argcs, char **argvs) {
     sdsfree(buf3);
 
     test("Format from Sender then Feed to Recver: ");
-    sds_cmd.Reset();
-    sender.FormatCommand(sds_cmd,argc,argv,lens);
-    recver.Feed(sds_cmd.Get());
+    
+    sender.FormatCommand(&sds_cmd,argc,argv,lens);
+    recver.Feed(sds_cmd);
+    sdsfree(sds_cmd);
 
 }

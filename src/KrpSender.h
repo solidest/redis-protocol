@@ -12,8 +12,7 @@
 # define _CLIENTWRITER_H_
 
 
-#include "SdsWrapper.h"
-
+#include "sds.h"
 
 #define KRP_ERR -1
 #define KRP_OK 0
@@ -24,7 +23,7 @@ class KrpSender {
 
     public:
         KrpSender(SendHandle* psender);
-        int FormatCommand(SdsWrapper& target, int argc, const char ** argv, const size_t *argvlen);
+        int FormatCommand(sds * target, int argc, const char ** argv, const size_t *argvlen);
         void SendCommand(int argc, const char ** argv, const size_t *argvlen);
 
     private:
