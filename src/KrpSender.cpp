@@ -1,11 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
-// #include <errno.h>
-// #include <ctype.h>
-
 #include "KrpSender.h"
-#include "sds.h"
 
 /* Return the number of digits of 'v' when converted to string in radix 10.
  * Implementation borrowed from link in redis/src/util.c:string2ll(). */

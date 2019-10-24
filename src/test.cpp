@@ -5,8 +5,6 @@
 
 #include "KrpSender.h"
 #include "KrpRecver.h"
-#include "KrpCommands.h"
-#include "Krp.h"
 
 static int tests = 0, fails = 0;
 #define test(_s) { printf("#%02d ", ++tests); printf(_s); }
@@ -32,8 +30,6 @@ void SendBuffer(sds buf) {
 
 int main(int argcs, char **argvs) {
 
-    KrpCommands::InitialCommands();
-
     int len;
     int res;
     const char *argv[3];
@@ -44,8 +40,7 @@ int main(int argcs, char **argvs) {
     int argc = 3;
 
     KrpSender sender(SendBuffer);
-    KrpCommands cmds(sender);
-    KrpRecver recver(cmds);
+    KrpRecver recver(CommandDispatcher);
 
     sds sds_cmd;
     test("Format command into sds by passing argc/argv without lengths: ");
@@ -70,22 +65,16 @@ int main(int argcs, char **argvs) {
     sdsfree(buf2);
 
     test("Feed telnet buffer to recver: ");
-    KrpRecver recver2(cmds);
+    KrpRecver recver2(CommandDispatcher);
     sds buf3 = sdsnew("ping\r\n");
     recver2.Feed(buf3);
     sdsfree(buf3);
 
     test("Format from Sender then Feed to Recver: ");
     KrpSender senderx(SendBuffer);
-    KrpCommands cmdsx(sender);
-    KrpRecver recverx(cmds);
+    KrpRecver recverx(CommandDispatcher);
     senderx.FormatCommand(&sds_cmd,argc,argv,lens);
     recverx.Feed(sds_cmd);
     sdsfree(sds_cmd);
 
-    test("Krp: ");
-    Krp krp(SendBuffer);
-    sds buf = sdsnew("*1\r\n$4\r\nping\r\n");
-    krp.Recved(buf);
-    sdsfree(buf);
 }

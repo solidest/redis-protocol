@@ -9,9 +9,9 @@
 #include <assert.h>
 #include "KrpRecver.h"
 
+KrpRecver::KrpRecver(ExecutHandle* phandle):_args() {
 
-KrpRecver::KrpRecver(KrpCommands& commands):_args(), _commands(commands)  {
-
+    _pExecuteHandle = phandle;
     _reqtype = REQUEST_TYPE_UNKNOW;
 
     /* query */
@@ -93,7 +93,7 @@ void KrpRecver::ReadCmdTelnet(int stopPos) {
                 for(int i = 0; i < argc; i++) {
                     ci.push_back(args[i]);
                 }
-                _commands.ExecuteCommand(ci);
+                _pExecuteHandle(ci);
             }
             sdsfreesplitres(args, argc);
         }
@@ -225,7 +225,7 @@ bool KrpRecver::ReadCmdSegmentStr(int stopPos) {
         _args.push_back(s);
         if(_args.size()==_next_count)
         {
-            _commands.ExecuteCommand(_args);
+            _pExecuteHandle(_args);
             while(!_args.empty()) {
                 sdsfree(_args.back());
                 _args.pop_back();

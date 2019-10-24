@@ -11,8 +11,8 @@
 #ifndef _CLIENTWRITER_H_
 # define _CLIENTWRITER_H_
 
-
 #include "sds.h"
+
 
 #define KRP_ERR -1
 #define KRP_OK 0

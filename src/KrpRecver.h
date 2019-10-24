@@ -20,16 +20,14 @@
 #include <deque>
 #include <vector>
 #include "sds.h"
-#include "KrpCommands.h"
 
 using namespace std;
+
+typedef void ExecutHandle(vector<sds>& ci);
 
 class KrpRecver
 {
 private:
-
-    KrpCommands & _commands;
-
     int _reqtype;                    /* Request protocol type: REQUEST_TYPE_* */
 
     /* query */
@@ -48,12 +46,13 @@ private:
     
 
 public:
-    KrpRecver(KrpCommands& commands);
+    KrpRecver(ExecutHandle* phandle);
     ~KrpRecver();
     int Feed(sds buff);
     sds GetLastErrorInfo();
 
 private:
+    ExecutHandle* _pExecuteHandle;
     void ReadCommand();
     bool ReadCmdSegment(int stopPos);
     bool ReadCmdSegmentStr(int stopPos);
