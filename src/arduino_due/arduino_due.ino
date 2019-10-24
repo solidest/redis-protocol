@@ -103,8 +103,7 @@ void CommandDispatcher(vector<sds>& args) {
   else if(strcmp(cmd, "init_can")==0) {
     configASSERT(workMode==0 && len==3);
   } else {
-    sds err=sdsempty();
-    err=sdscatfmt(err, "Bad command %S", args[0]);
+    sds err=sdscatfmt(sdsempty(), "Bad command %S", args[0]);
     toPc.SendError(err);
     sdsfree(err);
   }
