@@ -33,6 +33,11 @@ void KrpSender::SendCommand(int argc, const char ** argv, const size_t *argvlen)
     sdsfree(buf);
 }
 
+void KrpSender::SendError(const char* err) {
+    const char* args[2] = {"error", err};
+    this->SendCommand(2, args, NULL);
+}
+
 int KrpSender::FormatCommand(sds* target, int argc, const char ** argv, const size_t *argvlen) {
     sds cmd;
     unsigned long long totlen;
