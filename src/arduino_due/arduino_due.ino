@@ -17,7 +17,7 @@ using namespace std;
 #define SERIAL_TX_BUFFER_SIZE 512
 const char FIFO_SIZE = 200;       //cach length
 const char PIN_COUNT = 80;        //pin count
-auto& sss = SerialUSB;            //Hook serial
+auto& sss = Serial;            //Hook serial
 #endif
 
 #ifdef ARDUINO_MEGA
@@ -31,6 +31,7 @@ auto& sss = Serial;               //Hook serial
 //queue for capture data
 QueueHandle_t fifoData;
 QueueHandle_t fifoCach;
+SemaphoreHandle_t xSemaphore;
 
 //flow var is used by vWaitCmdTask only
 char workMode = 0;                    //work mode, 0: idle;  1: start capture data;
@@ -62,8 +63,17 @@ void setup() {
   fifoCach = xQueueCreate(FIFO_SIZE, sizeof(sds*));
 
   //create task 
-  BaseType_t res1 = xTaskCreate(vWaitCmdTask, "waitcmd", 512, NULL, 2, NULL);
-  BaseType_t res2 = xTaskCreate(vReportTask, "report", 512, NULL, 2, NULL);
+  BaseType_t res1 = xTaskCreate(vWaitCmdTask, "waitcmd", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+  BaseType_t res2 = xTaskCreate(vReportTask, "report", configMINIMAL_STACK_SIZE+200, NULL, 2, NULL);
+
+  //for report event
+  xSemaphore = xSemaphoreCreateCounting(FIFO_SIZE, 0);
+
+  //initial cach
+  for(int i=0; i<FIFO_SIZE; i++) {
+    sds c=sdsempty();
+    xQueueSendToBack(fifoCach, &c, 0);
+  }
 
   vTaskStartScheduler();
   for(;;);
@@ -72,14 +82,11 @@ void setup() {
 
 //task0: wait command from pc
 static void vWaitCmdTask( void *pvParameters ) {
-  //initial cach
-  for(int i=0; i<FIFO_SIZE; i++) {
-    sds c=sdsempty();
-    xQueueSendToBack(fifoCach, &c, 0);
-  }
-  
+
+  TickType_t ticks = xTaskGetTickCount();
   sds buf=sdsempty();
   for(;;) {
+    vTaskDelayUntil(&ticks, 1);
     int len = sss.available();
     if(len==0) {
       taskYIELD();
@@ -102,30 +109,30 @@ static void vWaitCmdTask( void *pvParameters ) {
 
 //task1: send fifoData up to pc
 static void vReportTask(void *pvParameters) {
+  
   for(;;) {
+    xSemaphoreTake(xSemaphore, portMAX_DELAY);
     sds msg_buf;
-    if(xQueueReceive(fifoData, &msg_buf, 0)) {
-      int pos=0;
-      int left_len=sdslen(msg_buf);
-      while(left_len>0) {
-        int space_len=sss.availableForWrite();
-        while(space_len<=0) {
-          space_len=sss.availableForWrite();
-        }
-        int sendlen = min(space_len, left_len);
-        sss.write(msg_buf+pos, sendlen);
-        pos+=sendlen;
-        left_len-=sendlen;
+    xQueueReceive(fifoData, &msg_buf, 0);
+    int pos=0;
+    int left_len=sdslen(msg_buf);
+    while(left_len>0) {
+      int space_len=sss.availableForWrite();
+      while(space_len<=0) {
+        space_len=sss.availableForWrite();
       }
-      if(sdslen(msg_buf)>1024) {
-        sdsfree(msg_buf);
-        msg_buf=sdsempty();
-      } else {
-        sdsclear(msg_buf);
-      }
-      xQueueSendToBack(fifoCach, &msg_buf, 0);
+      int sendlen = min(space_len, left_len);
+      sss.write(msg_buf+pos, sendlen);
+      pos+=sendlen;
+      left_len-=sendlen;
     }
-    taskYIELD();
+    if(sdslen(msg_buf)>1024) {
+      sdsfree(msg_buf);
+      msg_buf=sdsempty();
+    } else {
+      sdsclear(msg_buf);
+    }
+    xQueueSendToBack(fifoCach, &msg_buf, 0);
   }
 }
 
@@ -137,6 +144,7 @@ static void ReportBuffer(sds buf) {
   }
   msg_buf = sdscpylen(msg_buf, buf, sdslen(buf));
   xQueueSendToBack(fifoData, &msg_buf, 0);
+  xSemaphoreGive(xSemaphore);
 }
 
 //execute command
