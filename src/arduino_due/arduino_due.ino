@@ -9,9 +9,24 @@
 
 using namespace std;
 
-//cach length
-const char FIFO_SIZE = 10;
-const char PIN_COUNT = 80;
+//for hardware
+#define ARDUINO_DUE
+
+#ifdef ARDUINO_DUE
+#define SERIAL_RX_BUFFER_SIZE 512
+#define SERIAL_TX_BUFFER_SIZE 512
+const char FIFO_SIZE = 200;       //cach length
+const char PIN_COUNT = 80;        //pin count
+auto& sss = SerialUSB;            //Hook serial
+#endif
+
+#ifdef ARDUINO_MEGA
+#define SERIAL_RX_BUFFER_SIZE 256
+#define SERIAL_TX_BUFFER_SIZE 256
+const char FIFO_SIZE = 50;        //cach length
+const char PIN_COUNT = 60;        //pin count
+auto& sss = Serial;               //Hook serial
+#endif
 
 //queue for capture data
 QueueHandle_t fifoData;
@@ -24,8 +39,8 @@ vector<TaskHandle_t*> captureTasks(); //for capture task
 char comTask[4] = {0};                //for serial which need monitor
 char canTask[2] = {0};                //for can whitch need monitor
 
-static void vWaitCmdTask( void *pvParameters );
-static void vReportTask( void *pvParameters );
+static void vWaitCmdTask(void *pvParameters);
+static void vReportTask(void *pvParameters);
 
 static void CommandDispatcher(vector<sds>& args);
 static void ReportBuffer(sds buf);
@@ -36,39 +51,93 @@ KrpSender toPc(ReportBuffer);
 
 void setup() {
   //initial serialusb allways
-  Serial.begin(9600);
-  while(!Serial) {}
+  sss.begin(9600);
+  while(!sss) {}
   for(int i=0; i<PIN_COUNT; i++) {
     pinStates[i]=-1;
   }
 
   //intial data queue and cach queue 
-  fifoData = xQueueCreate(FIFO_SIZE, sizeof(sds));
-  fifoCach = xQueueCreate(FIFO_SIZE, sizeof(sds));
-  configASSERT(fifoData && fifoCach);
+  fifoData = xQueueCreate(FIFO_SIZE, sizeof(sds*));
+  fifoCach = xQueueCreate(FIFO_SIZE, sizeof(sds*));
 
   //create task 
-  BaseType_t res1 = xTaskCreate( vWaitCmdTask, "waitcmd", 256, NULL, 2, NULL );
-  BaseType_t res2 = xTaskCreate( vReportTask, "report", 32, NULL, 2, NULL );
-  configASSERT(res1==pdPASS && res2==pdPASS);
+  BaseType_t res1 = xTaskCreate(vWaitCmdTask, "waitcmd", 512, NULL, 2, NULL);
+  BaseType_t res2 = xTaskCreate(vReportTask, "report", 512, NULL, 2, NULL);
 
-  //initial cach
-  for(int i=0; i<FIFO_SIZE; i++) {
-    res1 = xQueueSendToBack(fifoCach, sdsnew(NULL), 0);
-    configASSERT(res1==pdPASS);
-  }
-  //Serial.println("111");
   vTaskStartScheduler();
-  //Serial.println("222");
   for(;;);
 }
 
 
-//send buf to pc
-void ReportBuffer(sds buf) {
-  Serial.write(buf, sdslen(buf));
+//task0: wait command from pc
+static void vWaitCmdTask( void *pvParameters ) {
+  //initial cach
+  for(int i=0; i<FIFO_SIZE; i++) {
+    sds c=sdsempty();
+    xQueueSendToBack(fifoCach, &c, 0);
+  }
+  
+  sds buf=sdsempty();
+  for(;;) {
+    int len = sss.available();
+    if(len==0) {
+      taskYIELD();
+      continue;
+    }
+    buf = sdsMakeRoomFor(buf, len);
+    sss.readBytes(buf, len);
+    sdssetlen(buf, len);
+    fromPc.Feed(buf);
+    if(sdslen(buf)>1024) {
+      sdsfree(buf);
+      buf=sdsempty();
+    } else {
+      sdsclear(buf); 
+    }
+    taskYIELD();
+  }
 }
 
+
+//task1: send fifoData up to pc
+static void vReportTask(void *pvParameters) {
+  for(;;) {
+    sds msg_buf;
+    if(xQueueReceive(fifoData, &msg_buf, 0)) {
+      int pos=0;
+      int left_len=sdslen(msg_buf);
+      while(left_len>0) {
+        int space_len=sss.availableForWrite();
+        while(space_len<=0) {
+          space_len=sss.availableForWrite();
+        }
+        int sendlen = min(space_len, left_len);
+        sss.write(msg_buf+pos, sendlen);
+        pos+=sendlen;
+        left_len-=sendlen;
+      }
+      if(sdslen(msg_buf)>1024) {
+        sdsfree(msg_buf);
+        msg_buf=sdsempty();
+      } else {
+        sdsclear(msg_buf);
+      }
+      xQueueSendToBack(fifoCach, &msg_buf, 0);
+    }
+    taskYIELD();
+  }
+}
+
+//send data to fifoData
+static void ReportBuffer(sds buf) {
+  sds msg_buf;
+  if(!xQueueReceive(fifoCach, &msg_buf, 0)) {
+    sss.println("cach is empty");
+  }
+  msg_buf = sdscpylen(msg_buf, buf, sdslen(buf));
+  xQueueSendToBack(fifoData, &msg_buf, 0);
+}
 
 //execute command
 void CommandDispatcher(vector<sds>& args) {
@@ -106,43 +175,10 @@ void CommandDispatcher(vector<sds>& args) {
     sds err=sdscatfmt(sdsempty(), "Bad command %S", args[0]);
     toPc.SendError(err);
     sdsfree(err);
-  }
-  
+  } 
 }
 
 
-//wait command from pc
-static void vWaitCmdTask( void *pvParameters ) {
-  sds buf = sdsempty();
-  for(;;) {
-    int len = Serial.available();
-    if(len>0) {
-      buf = sdsMakeRoomFor(buf, len);
-      Serial.readBytes(buf, len);
-      sdssetlen(buf, len);
-      fromPc.Feed(buf);
-      if(sdslen(buf)>600) {
-        sdsfree(buf);
-        buf=sdsempty();
-      } else {
-        sdsclear(buf); 
-      }
-    }
-    
-    taskYIELD();
-  }
-}
-
-
-//report up to pc
-static void vReportTask(void *pvParameters) {
-  for(;;) {
-
-    
-    taskYIELD();
-  }
-
-}
 
 // keep empty
 void loop() { }
