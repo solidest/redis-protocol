@@ -7,25 +7,34 @@
 #include <KrpRecver.h>
 #include <vector>
 
+#include "command.h"
+
 using namespace std;
 
 //for hardware
 #define ARDUINO_DUE
+#define _DEBUG_
+
+#ifdef _DEBUG_
+  #define logout(info) if(Serial)Serial.println(info)
+#else
+  #define logout(info) (void)
+#endif
 
 #ifdef ARDUINO_DUE
-#define SERIAL_RX_BUFFER_SIZE 512
-#define SERIAL_TX_BUFFER_SIZE 512
-const char FIFO_SIZE = 200;       //cach length
-const char PIN_COUNT = 80;        //pin count
-auto& sss = Serial;            //Hook serial
+  #define SERIAL_RX_BUFFER_SIZE 512
+  #define SERIAL_TX_BUFFER_SIZE 512
+  const char FIFO_SIZE = 200;       //cach length
+  const char PIN_COUNT = 80;        //pin count
+  auto& sss = Serial;            //Hook serial
 #endif
 
 #ifdef ARDUINO_MEGA
-#define SERIAL_RX_BUFFER_SIZE 256
-#define SERIAL_TX_BUFFER_SIZE 256
-const char FIFO_SIZE = 50;        //cach length
-const char PIN_COUNT = 60;        //pin count
-auto& sss = Serial;               //Hook serial
+  #define SERIAL_RX_BUFFER_SIZE 256
+  #define SERIAL_TX_BUFFER_SIZE 256
+  const char FIFO_SIZE = 50;        //cach length
+  const char PIN_COUNT = 70;        //pin count
+  auto& sss = Serial;               //Hook serial
 #endif
 
 //queue for capture data
@@ -50,10 +59,36 @@ static void ReportBuffer(sds buf);
 KrpRecver fromPc(CommandDispatcher);
 KrpSender toPc(ReportBuffer);
 
+// static void temp1( void *pvParameters ) {
+//   for(;;) {
+//     sds msg_buf;
+//     xQueueReceive(fifoCach, &msg_buf, 0);
+//     msg_buf = sdscat(msg_buf, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n");
+//     xQueueSendToBack(fifoData, &msg_buf, 0);
+//     xSemaphoreGive(xSemaphore);
+//     vTaskDelay(500 / portTICK_PERIOD_MS);    
+//   }
+
+// }
+
+// static void temp2( void *pvParameters ) {
+//   for(;;) {
+//     sds msg_buf;
+//     xQueueReceive(fifoCach, &msg_buf, 0);
+//     msg_buf = sdscat(msg_buf, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n");
+//     xQueueSendToBack(fifoData, &msg_buf, 0);
+//     xSemaphoreGive(xSemaphore);
+//     vTaskDelay(700 / portTICK_PERIOD_MS);
+    
+//   }
+
+// }
+
+
 void setup() {
   //initial serialusb allways
   sss.begin(9600);
-  while(!sss) {}
+  while(!sss) continue;
   for(int i=0; i<PIN_COUNT; i++) {
     pinStates[i]=-1;
   }
@@ -63,8 +98,11 @@ void setup() {
   fifoCach = xQueueCreate(FIFO_SIZE, sizeof(sds*));
 
   //create task 
-  BaseType_t res1 = xTaskCreate(vWaitCmdTask, "waitcmd", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-  BaseType_t res2 = xTaskCreate(vReportTask, "report", configMINIMAL_STACK_SIZE+200, NULL, 2, NULL);
+  xTaskCreate(vWaitCmdTask, "waitcmd", configMINIMAL_STACK_SIZE+500, NULL, 1, NULL);
+  xTaskCreate(vReportTask, "report", configMINIMAL_STACK_SIZE+500, NULL, 2, NULL);
+
+  // xTaskCreate(temp1, "temp1", 300, NULL, 1, NULL);
+  // xTaskCreate(temp2, "temp2", 300, NULL, 1, NULL);
 
   //for report event
   xSemaphore = xSemaphoreCreateCounting(FIFO_SIZE, 0);
@@ -154,34 +192,94 @@ void CommandDispatcher(vector<sds>& args) {
   configASSERT(len>0);
   sds cmd=args[0];
 
-  //init_dio
-  if(strcmp(cmd, "init_dio")==0) {
+  //init dio
+  if(strcmp(cmd, "dio")==0) {
     configASSERT(workMode==0 && len==3);
+    logout("dio command");
+    
     int pinid=atoi(args[1]);
-    if(pinid==13 || pinid<0 || pinid>54) {
-      toPc.SendError("Pin id error");
-      return;
-    }
-    auto mode=(strcmp(args[2], "out")==0) ? OUTPUT : (strcmp(args[3], "in_pullup")==0 ? INPUT_PULLUP : INPUT);
-    if(pinStates[pinid]!=-1) {
-      toPc.SendError("Pin conflict");
-      return;
-    } else {
-      pinMode(pinid, mode);
-      pinStates[pinid]=mode;
-    }
+    configASSERT(pinid!=13 && pinid>0 && pinid<=54);
+    auto mode=(strcmp(args[2], "out")==0) ? OUTPUT : (strcmp(args[2], "in_pullup")==0 ? INPUT_PULLUP : INPUT);
+    
+    configASSERT(pinStates[pinid]==-1);
+    pinStates[pinid]=mode;
 
-  //init_com
-  } else if(strcmp(cmd, "init_com")==0) {
+  //init serial
+  } else if(strcmp(cmd, "serial")==0) {
     configASSERT(workMode==0 && len==3);
+    logout("serial command");
+    
+    int id=atoi(args[1]);
+    configASSERT(id>=0 && id<=4);
+    auto cfg = args[2];
+    switch(id) {
+      case 0:
+        configASSERT(pinStates[0]==-1 && pinStates[1]==-1);
+        pinStates[0]=100;
+        pinStates[1]=100;
+        configASSERT(set_serial(Serial, cfg));
+        break;
+      case 1:
+        configASSERT(pinStates[19]==-1 && pinStates[18]==-1);
+        pinStates[19]=100;
+        pinStates[18]=100;
+        configASSERT(set_serial(Serial1, cfg));
+        break;
+      case 2:
+        configASSERT(pinStates[17]==-1 && pinStates[16]==-1);
+        pinStates[17]=100;
+        pinStates[16]=100;
+        configASSERT(set_serial(Serial2, cfg));
+        break;
+      case 3:
+        configASSERT(pinStates[15]==-1 && pinStates[14]==-1);
+        pinStates[15]=100;
+        pinStates[14]=100;
+        configASSERT(set_serial(Serial3, cfg));
+        break;
+    }
   }
 
-  //init_can
-  else if(strcmp(cmd, "init_can")==0) {
+  //init can
+  else if(strcmp(cmd, "can")==0) {
     configASSERT(workMode==0 && len==3);
+    logout("can command");
+    int id=atoi(args[1]);
+    configASSERT(id==0 || id==1);
+    if(id==0) {
+      configASSERT(pinStates[23]==-1 && pinStates[24]==-1);
+      pinStates[23]=100;
+      pinStates[24]=100;
+    } else {
+      configASSERT(pinStates[53]==-1 && pinStates[66]==-1);
+      pinStates[53]=100;
+      pinStates[66]=100;
+    }
+    configASSERT(set_can(id, args[2]));
+
+  //start capture data
+  } else if(strcmp(cmd, "start")==0) {
+    configASSERT(workMode==0);
+    logout("start command");
+    
+    //TODO start capture data
+    workMode = 1;
+
+  //stop capture data
+  } else if(strcmp(cmd, "stop")==0) {
+    configASSERT(workMode==1);
+    logout("stop command");
+    
+    //TODO stop all capture task
+    for(int i=0; i<PIN_COUNT; i++) {
+      pinStates[i]=-1;
+    }
+    workMode = 0;
+
+  //bad command
   } else {
     sds err=sdscatfmt(sdsempty(), "Bad command %S", args[0]);
-    toPc.SendError(err);
+    logout(err);
     sdsfree(err);
   } 
 }
