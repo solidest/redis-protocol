@@ -74,7 +74,7 @@ TFT TFTscreen = TFT(cs, dc, rst);
 
 //人体感应计数
 int humanLeaveCount = 0;
-int humanActiveCount = 0;
+int humanActiveCount = 1;
 
 //蜂鸣器
 int beepIdx = 0;
@@ -161,13 +161,17 @@ void loop() {
 
   //人体感应计数
   int humanInState = digitalRead(humanIn);
-  if (humanInState == HIGH) {
-    if(humanLeaveCount>HUMAN_LIMIT) {
+
+  
+  if (humanInState == HIGH) { //有人
+    if(humanLeaveCount>HUMAN_LIMIT) { //刚回来
       playMusic(1);
+      humanActiveCount = 1;
       updateDateTime();
+    } else {  //一直没离开
+      humanActiveCount += (1 + humanLeaveCount);
+      humanLeaveCount = 0;
     }
-    humanActiveCount += 1;
-    humanLeaveCount = 0;
   }
   else {
     humanLeaveCount+=1;
@@ -306,7 +310,7 @@ void redrawTemprature() {
 //更新温度
 void udpateTemprature() {
   long val=analogRead(temperaturePin);
-  float temp = (val*5.0/1024*100);  //把0~5V对应模拟口读数1~1024; 100=1000/10,1000是毫伏与伏的转换,每10毫伏对应一度温升
+  float temp = (val*5.0/1024*100)-10;  //把0~5V对应模拟口读数1~1024; 100=1000/10,1000是毫伏与伏的转换,每10毫伏对应一度温升
   if(tempidx==-1) {
     temperature = temp;
     tempidx = 0;
