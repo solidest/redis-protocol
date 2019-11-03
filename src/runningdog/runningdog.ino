@@ -8,6 +8,32 @@
 //#include "pitches.h"
 #include "huluwa.h"
 
+//#define _SET_TIME_
+
+#ifdef _SET_TIME_
+const char *monthName[12] = {
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
+#endif
+
+//人体离开时间间隔
+#define HUMAN_LIMIT 300 //5分钟
+
+//引脚定义
+#define beepPin 3
+#define buttonPin 2
+#define humanIn 7
+#define lockPin 11
+#define temperaturePin A6
+
+//temperature adjust
+#define TEMP_DIFF 10
+
+#define cs   10
+#define dc   9
+#define rst  8
+
 //葫芦娃
 char length_hlw1;
 char length_hlw2;
@@ -45,32 +71,6 @@ const float noteDurations_hlw3[] =
   0.5,1,1+0.5,1,
   0.5,0.5,0.5,0.5,1+1,
   0.5,1,1+0.5,1};
-  
-
-#define cs   10
-#define dc   9
-#define rst  8
-
-//#define _SET_TIME_
-
-#ifdef _SET_TIME_
-const char *monthName[12] = {
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-};
-#endif
-
-TFT TFTscreen = TFT(cs, dc, rst);
-
-//人体离开时间间隔
-#define HUMAN_LIMIT 300 //5分钟
-
-//引脚定义
-#define beepPin 3
-#define buttonPin 2
-#define humanIn 7
-#define lockPin 11
-#define temperaturePin A6
 
 //人体感应计数
 int humanLeaveCount = 0;
@@ -90,6 +90,8 @@ int tm_count = 0;
 float temparray[10];
 float temperature = 0;
 int tempidx = -1;
+
+TFT TFTscreen = TFT(cs, dc, rst);
 
 void setup() {
   length_hlw1 = sizeof(melody_hlw1)/sizeof(melody_hlw1[0]);
@@ -310,7 +312,7 @@ void redrawTemprature() {
 //更新温度
 void udpateTemprature() {
   long val=analogRead(temperaturePin);
-  float temp = (val*5.0/1024*100)-10;  //把0~5V对应模拟口读数1~1024; 100=1000/10,1000是毫伏与伏的转换,每10毫伏对应一度温升
+  float temp = (val*5.0/1024*100)-TEMP_DIFF;  //把0~5V对应模拟口读数1~1024; 100=1000/10,1000是毫伏与伏的转换,每10毫伏对应一度温升
   if(tempidx==-1) {
     temperature = temp;
     tempidx = 0;
