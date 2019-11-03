@@ -5,66 +5,112 @@
 #include <SD.h>
 #include <TFT.h>  // Arduino LCD library
 #include <SPI.h>
-#include "pitches.h"
+//#include "pitches.h"
+#include "huluwa.h"
 
-// notes in the melody:
-const int melody[] = {
-  NOTE_C4, NOTE_G3, NOTE_G3, NOTE_A3, NOTE_G3, 0, NOTE_B3, NOTE_C4
-};
+//葫芦娃
+char length_hlw1;
+char length_hlw2;
+char length_hlw3;
 
-// note durations: 4 = quarter note, 8 = eighth note, etc.:
-const int noteDurations[] = {
-  4, 8, 8, 4, 4, 4, 4, 4
-};
+const int melody_hlw1[] = 
+  {NOTE_DH1,NOTE_D6,NOTE_D5,NOTE_D6,NOTE_D0,
+  NOTE_DH1,NOTE_D6,NOTE_D5,NOTE_DH1,NOTE_D6,NOTE_D0};
 
-#define HUMAN_LIMIT 300
+
+const int melody_hlw2[] =
+  {NOTE_DH1,NOTE_D0,NOTE_D6,NOTE_D6,NOTE_D5,NOTE_D5,NOTE_D6,NOTE_D6,
+  NOTE_D0,NOTE_D5,NOTE_D1,NOTE_D3,NOTE_D0};
+ 
+const int melody_hlw3[] =
+  {NOTE_D1,NOTE_D1,NOTE_D3,
+  NOTE_D1,NOTE_D1,NOTE_D3,NOTE_D0,
+  NOTE_D6,NOTE_D6,NOTE_D6,NOTE_D5,NOTE_D6,
+  NOTE_D5,NOTE_D1,NOTE_D3,NOTE_D0,
+  NOTE_DH1,NOTE_D6,NOTE_D6,NOTE_D5,NOTE_D6,
+  NOTE_D5,NOTE_D1,NOTE_D2,NOTE_D0};
+  
+const float noteDurations_hlw1[] =
+  {1,1,0.5,0.5,1,
+  0.5,0.5,0.5,0.5,1,0.5};
+
+const float noteDurations_hlw2[] =
+  {0.5,0.5,0.5+0.25,0.25,0.5+0.25,0.25,0.5+0.25,0.25,
+  0.5,1,0.5,1,1};
+   
+const float noteDurations_hlw3[] =
+  {1,1,1+1,
+  0.5,1,1+0.5,1,
+  1,1,0.5,0.5,1,
+  0.5,1,1+0.5,1,
+  0.5,0.5,0.5,0.5,1+1,
+  0.5,1,1+0.5,1};
+  
 
 #define cs   10
 #define dc   9
 #define rst  8
 
-#define _SET_TIME_
+//#define _SET_TIME_
 
+#ifdef _SET_TIME_
 const char *monthName[12] = {
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
+#endif
 
 TFT TFTscreen = TFT(cs, dc, rst);
 
-const int beepPin = 3; //12;
-const int buttonPin = 2;
-const int humanIn = 7;
-const int lockPin = 11;
-const int temperaturePin = A6;  
+//人体离开时间间隔
+#define HUMAN_LIMIT 300 //5分钟
 
+//引脚定义
+#define beepPin 3
+#define buttonPin 2
+#define humanIn 7
+#define lockPin 11
+#define temperaturePin A6
+
+//人体感应计数
 int humanLeaveCount = 0;
 int humanActiveCount = 0;
 
-bool beepOn = false;
+//蜂鸣器
+int beepIdx = 0;
+
+//继电器
 bool isLock = false;
 
+//时间计数
 tmElements_t tm;
-int tm_count = -1;
+int tm_count = 0;
 
+//温度传感器
 float temparray[10];
 float temperature = 0;
 int tempidx = -1;
 
 void setup() {
+  length_hlw1 = sizeof(melody_hlw1)/sizeof(melody_hlw1[0]);
+  length_hlw2 = sizeof(melody_hlw2)/sizeof(melody_hlw2[0]);
+  length_hlw3 = sizeof(melody_hlw3)/sizeof(melody_hlw3[0]);
+  
   pinMode(lockPin, OUTPUT);
   pinMode(beepPin, OUTPUT);
+  digitalWrite(beepPin, LOW);
   pinMode(humanIn, INPUT);
   pinMode(buttonPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(buttonPin), onButton, RISING);
+  attachInterrupt(digitalPinToInterrupt(buttonPin), onButton, FALLING);
 
   Serial.begin(9600);
   
 #ifdef _SET_TIME_
+  //设置时间
   while (!Serial);
   delay(200);
   
-  bool parse=false;
+  bool parse =false;
   bool config=false;
   
   if (getDate(__DATE__) && getTime(__TIME__)) {
@@ -83,27 +129,41 @@ void setup() {
   }
 #endif
 
-  setupTFT();
+  //setup TFT
+  TFTscreen.begin();
+  TFTscreen.background(0, 0, 0);
+  TFTscreen.stroke(255, 0, 0);
+  TFTscreen.setTextSize(2);
+  TFTscreen.text("www.kiyun.com", 2, 5);
 
+  updateDateTime();
+  udpateTemprature();
 }
 
 
 void loop() {
-  if(tm_count==-1) {
+
+  if(beepIdx>0) {
+    playMusic(beepIdx);
+    beepIdx = 0;
     updateDateTime();
   }
+  
+  //更新时间
   tm_count++;
   if(tm_count==58) {
     updateDateTime();
     tm_count = 0;
   }
-
+  
+  //更新温度
   udpateTemprature();
 
+  //人体感应计数
   int humanInState = digitalRead(humanIn);
   if (humanInState == HIGH) {
     if(humanLeaveCount>HUMAN_LIMIT) {
-      playMusic();
+      playMusic(1);
       updateDateTime();
     }
     humanActiveCount += 1;
@@ -112,62 +172,91 @@ void loop() {
   else {
     humanLeaveCount+=1;
     if(humanLeaveCount==HUMAN_LIMIT) {
-      playMusic();
+      playMusic(1);
       humanActiveCount=0;
       updateDateTime();
     }
   }
-  tryLock();
+
+  //30分钟提醒
+  if(humanActiveCount==60*30) {
+    playMusic(2);
+  }
+
+  //50分钟提醒
+  if(humanActiveCount==60*50) {
+    playMusic(3);
+  }
+
+  //检查锁状态
+  checkLock();
+
   delay(1000);
 }
 
-void setupTFT() {
-  TFTscreen.begin();
-  TFTscreen.background(0, 0, 0);
-  TFTscreen.stroke(255, 0, 0);
-  TFTscreen.setTextSize(2);
-  TFTscreen.text("www.kiyun.com", 2, 5);
+//检查继电器锁
+void checkLock() {
+  if(isLock && humanActiveCount<60*60) {
+    digitalWrite(lockPin, LOW);
+    isLock = false;
+  }
+
+  if(!isLock && humanActiveCount>=60*60) {
+    digitalWrite(lockPin, HIGH);
+    isLock = true;
+  }
 }
 
+
 //播放音乐
-void playMusic() {
-  for (int thisNote = 0; thisNote < 8; thisNote++) {
+void playMusic(int idx) {
 
-    // to calculate the note duration, take one second divided by the note type.
-    //e.g. quarter note = 1000 / 4, eighth note = 1000/8, etc.
-    int noteDuration = 1000 / noteDurations[thisNote];
-    tone(beepPin, melody[thisNote], noteDuration);
+  char length_hlw;
+  const int *melody_hlw;
+  const float *noteDurations_hlw;
 
-    // to distinguish the notes, set a minimum time between them.
-    // the note's duration + 30% seems to work well:
+  switch(idx) {
+    case 1:
+      length_hlw = length_hlw1;
+      melody_hlw = melody_hlw1;
+      noteDurations_hlw = noteDurations_hlw1;
+      break;
+    case 2:
+      length_hlw = length_hlw2;
+      melody_hlw = melody_hlw2;
+      noteDurations_hlw = noteDurations_hlw2;
+      break;
+    case 3:
+      length_hlw = length_hlw3;
+      melody_hlw = melody_hlw3;
+      noteDurations_hlw = noteDurations_hlw3;
+      break;
+    default:
+      return;
+  }
+  
+  for (int thisNote = 0; thisNote < length_hlw; thisNote++) {
+    
+    int noteDuration = noteDurations_hlw[thisNote]*400;
+    tone(beepPin, melody_hlw[thisNote], noteDuration);
+    
     int pauseBetweenNotes = noteDuration * 1.30;
     delay(pauseBetweenNotes);
-    // stop the tone playing:
     noTone(beepPin);
   }
 }
 
 //按钮按下
 void onButton() {
-  if(beepOn) {
-    digitalWrite(beepPin, LOW);
-    beepOn = false;
-  } else {
-    digitalWrite(beepPin, HIGH);
-    beepOn = true;
+  beepIdx += 1;
+  if(beepIdx>3) {
+    beepIdx=1;
+  }
+  if(Serial) {
+    Serial.println(beepIdx);
   }
 }
 
-//尝试锁住继电器
-void tryLock() {
-  if(temperature>25 && !isLock) {
-    digitalWrite(lockPin, HIGH);
-    isLock = true;
-  } else if(temperature<24 && isLock) {
-    digitalWrite(lockPin, LOW);
-    isLock = false;
-  }
-}
 
 //更新时间
 void updateDateTime() {
@@ -239,9 +328,11 @@ void udpateTemprature() {
       redrawTemprature();
     }
   }
-  
+ 
   tempidx++;
 }
+
+#ifdef _SET_TIME_
 
 //获取时间
 bool getTime(const char *str) {
@@ -270,3 +361,5 @@ bool getDate(const char *str) {
   tm.Year = CalendarYrToTm(Year);
   return true;
 }
+
+#endif
