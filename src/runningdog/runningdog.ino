@@ -167,31 +167,34 @@ void loop() {
   
   if (humanInState == HIGH) { //有人
     if(humanLeaveCount>HUMAN_LIMIT) { //刚回来
-      playMusic(1);
       humanActiveCount = 1;
-      updateDateTime();
-    } else {  //一直没离开
-      humanActiveCount += (1 + humanLeaveCount);
       humanLeaveCount = 0;
+      updateDateTime();
+      playMusic(1);
+    } else {  //一直没离开
+      int tick = 1 + humanLeaveCount;
+      humanLeaveCount = 0;
+
+      //30分钟提醒
+      if(humanActiveCount<=60*30 && humanActiveCount+tick>=60*30) {
+        playMusic(2);
+      }
+
+      //50分钟提醒
+      if(humanActiveCount<=60*50 && humanActiveCount+tick>=60*50) {
+        playMusic(3);
+      }
+      
+      humanActiveCount += tick;
     }
   }
   else {
     humanLeaveCount+=1;
     if(humanLeaveCount==HUMAN_LIMIT) {
-      playMusic(1);
       humanActiveCount=0;
       updateDateTime();
+      playMusic(1);
     }
-  }
-
-  //30分钟提醒
-  if(humanActiveCount==60*30) {
-    playMusic(2);
-  }
-
-  //50分钟提醒
-  if(humanActiveCount==60*50) {
-    playMusic(3);
   }
 
   //检查锁状态
