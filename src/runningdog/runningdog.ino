@@ -24,7 +24,7 @@ const char *monthName[12] = {
 #define beepPin 3
 #define buttonPin 2
 #define humanIn 7
-#define lockPin 11
+#define lockPin 5
 #define temperaturePin A6
 
 //temperature adjust
@@ -94,18 +94,23 @@ int tempidx = -1;
 TFT TFTscreen = TFT(cs, dc, rst);
 
 void setup() {
+  
+  Serial.begin(9600);
+  
   length_hlw1 = sizeof(melody_hlw1)/sizeof(melody_hlw1[0]);
   length_hlw2 = sizeof(melody_hlw2)/sizeof(melody_hlw2[0]);
   length_hlw3 = sizeof(melody_hlw3)/sizeof(melody_hlw3[0]);
   
   pinMode(lockPin, OUTPUT);
   pinMode(beepPin, OUTPUT);
-  digitalWrite(beepPin, LOW);
   pinMode(humanIn, INPUT);
-  pinMode(buttonPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(buttonPin), onButton, FALLING);
+  //pinMode(buttonPin, INPUT_PULLUP);
 
-  Serial.begin(9600);
+  //attachInterrupt(digitalPinToInterrupt(buttonPin), onButton, FALLING);
+  //digitalWrite(beepPin, HIGH);
+  
+  digitalWrite(lockPin, HIGH);
+
   
 #ifdef _SET_TIME_
   //设置时间
@@ -159,14 +164,14 @@ void loop() {
   }
   
   //更新温度
-  udpateTemprature();
+  //udpateTemprature();
 
   //人体感应计数
   int humanInState = digitalRead(humanIn);
 
   
   if (humanInState == HIGH) { //有人
-    if(humanLeaveCount>HUMAN_LIMIT) { //刚回来
+    if(humanLeaveCount>=HUMAN_LIMIT) { //刚回来
       humanActiveCount = 1;
       humanLeaveCount = 0;
       updateDateTime();
@@ -199,19 +204,19 @@ void loop() {
 
   //检查锁状态
   checkLock();
-
+  redrawNumber();
   delay(1000);
 }
 
 //检查继电器锁
 void checkLock() {
   if(isLock && humanActiveCount<60*60) {
-    digitalWrite(lockPin, LOW);
+    digitalWrite(lockPin, HIGH);
     isLock = false;
   }
 
   if(!isLock && humanActiveCount>=60*60) {
-    digitalWrite(lockPin, HIGH);
+    digitalWrite(lockPin, LOW);
     isLock = true;
   }
 }
@@ -292,6 +297,24 @@ void updateDateTime() {
     TFTscreen.setTextSize(2);
     TFTscreen.text(buf_date, 19, 80);
   }
+}
+
+//print number
+void redrawNumber() {
+  TFTscreen.stroke(0,0,0);
+  TFTscreen.fill(0,0,0);
+  TFTscreen.rect(0, 100, TFTscreen.width(), 25);
+    
+  char txt_chars[20];
+
+  // print new value
+  String txt_leave(humanLeaveCount);
+  String txt_active(humanActiveCount);
+  String txt = txt_active + "  -" + txt_leave;
+  txt.toCharArray(txt_chars,10);
+  TFTscreen.setTextSize(2);
+  TFTscreen.stroke(255, 255, 0);
+  TFTscreen.text(txt_chars, 30, 105);
 }
 
 //打印温度
