@@ -308,13 +308,13 @@ void redrawNumber() {
   char txt_chars[20];
 
   // print new value
-  String txt_leave(humanLeaveCount);
-  String txt_active(humanActiveCount);
+  String txt_leave((int)humanLeaveCount/60);
+  String txt_active((int)humanActiveCount/60);
   String txt = txt_active + "  -" + txt_leave;
   txt.toCharArray(txt_chars,10);
   TFTscreen.setTextSize(2);
   TFTscreen.stroke(255, 255, 0);
-  TFTscreen.text(txt_chars, 30, 105);
+  TFTscreen.text(txt_chars, 40, 105);
 }
 
 //打印温度
